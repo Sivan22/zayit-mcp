@@ -23,14 +23,34 @@ fun main(args: Array<String>): Unit {
     // Determine mode: --port N  or  MCP_PORT env var → HTTP, otherwise stdio
     val port = parsePort(args) ?: System.getenv("MCP_PORT")?.toIntOrNull()
 
-    val appData = System.getenv("APPDATA")
-        ?: error("APPDATA environment variable is not set")
-    val baseDir = "$appData/io.github.kdroidfilter.seforimapp/databases"
+    val baseDir = resolveDataDir()
 
     if (port != null) {
         runHttp(port, baseDir)
     } else {
         runStdio(baseDir, realStdout)
+    }
+}
+
+private fun resolveDataDir(): String {
+    // Explicit override takes precedence on all platforms
+    System.getenv("ZAYIT_DATA_DIR")?.let { return it }
+
+    val home = System.getProperty("user.home")
+    val os = System.getProperty("os.name").lowercase()
+    val appId = "io.github.kdroidfilter.seforimapp"
+
+    return when {
+        os.contains("win") -> {
+            val appData = System.getenv("APPDATA") ?: "$home/AppData/Roaming"
+            "$appData/$appId/databases"
+        }
+        os.contains("mac") -> "$home/Library/Application Support/$appId/databases"
+        else -> {
+            // Linux — XDG Base Directory spec
+            val xdgData = System.getenv("XDG_DATA_HOME") ?: "$home/.local/share"
+            "$xdgData/$appId/databases"
+        }
     }
 }
 

@@ -1,31 +1,32 @@
 # Zayit MCP Server
 
-An MCP (Model Context Protocol) server that exposes the [Zayit](https://github.com/kdroidFilter/Zayit) Jewish texts library to AI assistants. Wraps Zayit's SQLite database and Lucene search indices — no network required.
+An MCP (Model Context Protocol) server that exposes the [Zayit](https://github.com/kdroidFilter/Zayit) Jewish texts library to AI assistants. Wraps Zayit's SQLite database and Lucene search indices — no network required, fully offline.
 
 ## Prerequisites
 
-- **Zayit** installed (provides the database and Lucene indices at `%APPDATA%\io.github.kdroidfilter.seforimapp\databases\`)
-- **Java 21+** — Lucene 10.x requires it. Install [Temurin 21](https://adoptium.net/) or run:
-  ```
-  winget install EclipseAdoptium.Temurin.21.JDK
-  ```
+- **Zayit** installed on the same machine (provides the database and Lucene indices)
+- **Java 21+** — required by Lucene 10.x
+
+### Installing Java 21
+
+| Platform | Command |
+|----------|---------|
+| Windows | `winget install EclipseAdoptium.Temurin.21.JDK` |
+| macOS | `brew install --cask temurin@21` |
+| Ubuntu/Debian | `sudo apt install temurin-21-jdk` (add [Adoptium repo](https://adoptium.net/installation/linux/) first) |
+| Fedora/RHEL | `sudo dnf install temurin-21-jdk` |
 
 ## Building
 
-Requires Gradle. If not installed:
+The Gradle wrapper is included — no separate Gradle installation needed.
 
-```powershell
-# Download Gradle 8.14
-$url = "https://services.gradle.org/distributions/gradle-8.14-bin.zip"
-Invoke-WebRequest $url -OutFile "$env:USERPROFILE\gradle.zip" -UseBasicParsing
-Expand-Archive "$env:USERPROFILE\gradle.zip" -DestinationPath C:\tools\gradle
-```
+```bash
+# Linux / macOS
+chmod +x gradlew
+./gradlew shadowJar
 
-Then build the fat JAR:
-
-```powershell
-$env:JAVA_HOME = "C:\Program Files\Eclipse Adoptium\jdk-21.0.11.10-hotspot"
-C:\tools\gradle\gradle-8.14\bin\gradle.bat shadowJar
+# Windows
+gradlew.bat shadowJar
 ```
 
 Output: `build/libs/zayit-mcp.jar` (~35 MB, self-contained)
@@ -34,41 +35,69 @@ Output: `build/libs/zayit-mcp.jar` (~35 MB, self-contained)
 
 ### stdio mode (for Claude Desktop / MCP clients)
 
-```bat
+```bash
+# Linux / macOS
+chmod +x run-stdio.sh
+./run-stdio.sh
+
+# Windows
 run-stdio.bat
-```
-
-Or directly:
-
-```powershell
-"C:\Program Files\Eclipse Adoptium\jdk-21.0.11.10-hotspot\bin\java.exe" `
-  -jar build\libs\zayit-mcp.jar
 ```
 
 ### HTTP / SSE mode (for testing or remote access)
 
-```bat
+```bash
+# Linux / macOS
+./run-http.sh 3001
+
+# Windows
 run-http.bat 3001
-```
-
-Or with an environment variable:
-
-```powershell
-$env:MCP_PORT = "3001"
-java -jar build\libs\zayit-mcp.jar
 ```
 
 The MCP endpoint is at `http://localhost:3001/mcp`.
 
+### Custom data directory
+
+If Zayit stores its data somewhere non-standard, set `ZAYIT_DATA_DIR`:
+
+```bash
+ZAYIT_DATA_DIR=/path/to/databases ./run-stdio.sh
+```
+
+## Data paths (auto-detected per OS)
+
+| Platform | Path |
+|----------|------|
+| Windows | `%APPDATA%\io.github.kdroidfilter.seforimapp\databases` |
+| macOS | `~/Library/Application Support/io.github.kdroidfilter.seforimapp/databases` |
+| Linux | `~/.local/share/io.github.kdroidfilter.seforimapp/databases` (XDG) |
+
 ## Claude Desktop configuration
 
-Add to `%APPDATA%\Claude\claude_desktop_config.json`:
+### Windows
+
+`%APPDATA%\Claude\claude_desktop_config.json`:
 
 ```json
 {
   "mcpServers": {
     "zayit": {
-      "command": "C:\\dev\\zayit_mcp\\run-stdio.bat"
+      "command": "C:\\path\\to\\zayit-mcp\\run-stdio.bat"
+    }
+  }
+}
+```
+
+### macOS / Linux
+
+`~/Library/Application Support/Claude/claude_desktop_config.json` (macOS)  
+`~/.config/Claude/claude_desktop_config.json` (Linux):
+
+```json
+{
+  "mcpServers": {
+    "zayit": {
+      "command": "/path/to/zayit-mcp/run-stdio.sh"
     }
   }
 }
@@ -199,10 +228,5 @@ zayit-mcp.jar
     └── Lucene (seforim.db.lucene,   → text_search, search_ref
                 seforim.db.lookup.lucene)
 ```
-
-**Data paths** (read-only, concurrent access safe via WAL mode):
-- `%APPDATA%\io.github.kdroidfilter.seforimapp\databases\seforim.db`
-- `%APPDATA%\io.github.kdroidfilter.seforimapp\databases\seforim.db.lucene\`
-- `%APPDATA%\io.github.kdroidfilter.seforimapp\databases\seforim.db.lookup.lucene\`
 
 **Stack:** Kotlin 2.3 · MCP SDK 0.12.0 · Lucene 10.3.2 · SQLite JDBC 3.49 · Ktor 3.1 (HTTP mode)
